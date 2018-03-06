@@ -73,11 +73,6 @@ String ValidCard_1, ValidCard_2, ValidCard_3;
 int Card_ok[] = {false, false, false, false};
 int PuzzleState = 0;
 
-boolean ValidCardOrder = true;
-String Prevcard = "";
-int NoCardCnt = 0;
-int DoorOpenSec = 2;
-
 int stageNumber = -2;
 
 int waitForTCPRecieve = 0;
@@ -87,7 +82,7 @@ int waitForTCPRecieve = 0;
  */
 void setup()
 {
-  
+
   Serial.begin(115200); // Initialize serial communications with the PC
   while (!Serial)
     ; // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
@@ -109,7 +104,7 @@ void setup()
     Serial.print(F(": "));
     mfrc522[reader].PCD_DumpVersionToSerial();
   }
-  PuzzleState=1;
+  PuzzleState = 1;
 }
 
 /**
@@ -117,7 +112,7 @@ void setup()
  */
 void loop()
 {
-  
+
   espTcpClient_check();
 
   if (stageNumber > 1 && PuzzleState > 0)
@@ -125,13 +120,14 @@ void loop()
     open_door1();
   }
   // if we skipped to next stage we open Lift Door as a temp bypass for no Admin
-  else if (stageNumber > 2 ) {
-   open_lift();
+  else if (stageNumber > 2)
+  {
+    open_lift();
   }
-  
+
   if (PuzzleState == 1)
   {
-    if (millis() - waitForTCPRecieve > TCP_BLOCK_TIMEOUT_MS) 
+    if (millis() - waitForTCPRecieve > TCP_BLOCK_TIMEOUT_MS)
     {
       readRFID();
     }
@@ -164,66 +160,66 @@ void loop()
   //  no wifi  TODO reset esp after 3 reties//
   else
   {
-    //Serial.println("No WiFi connection");
+    Serial.println("No WiFi connection");
 
-    //  reboot until wifi connected  //
-    // delay(3000);
-    // asm volatile("  jmp 0");
+    // reboot until wifi connected  //
+    delay(3000);
+    asm volatile("  jmp 0");
   }
 }
 
 void readRFID()
 {
-    
-    for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) 
-    {
-      // Look for new cards
-//    if (mfrc522[reader].PICC_IsNewCardPresent() && mfrc522[reader].PICC_ReadCardSerial())
-     // mfrc522[reader].PCD_Init();
-      byte bufferATQA[2];
-      byte bufferSize = sizeof(bufferATQA);
-      MFRC522::StatusCode status = mfrc522[reader].PICC_RequestA(bufferATQA, &bufferSize);
-      bool result = (status == MFRC522::STATUS_OK || status == MFRC522::STATUS_COLLISION);
-      if (!result) {
-        status = mfrc522[reader].PICC_WakeupA(bufferATQA, &bufferSize);
-        result = (status == MFRC522::STATUS_OK || status == MFRC522::STATUS_COLLISION);
-      }
-      if (status == 0 || status == 2) 
-      {        
-        Serial.print("<" );
-        
-        int c =0; 
-        if (mfrc522[reader].PICC_ReadCardSerial()) c++;
-        if (mfrc522[reader].PICC_ReadCardSerial()) c++;
-        Serial.print(c);
-        if (c>0)
-        {
-            // Show some details of the PICC (that is: the tag/card)
-            dump_byte_array(mfrc522[reader].uid.uidByte, mfrc522[reader].uid.size);
-    
-            Serial.print(F(", Reader "));
-            Serial.print(reader);
-            Serial.print(" ");        
-            Serial.print(read_rfid);
-            
-            ValidateCard(reader);
-    
-        }
-        Serial.println(">" );
-      } 
-      else 
-      {
-        if (Card_ok[reader]>0) Card_ok[reader]--;
-      }
-      
-      // Stop encryption on PCD
-      mfrc522[reader].PCD_StopCrypto1();
-      // Halt PICC
-      mfrc522[reader].PICC_HaltA();
 
+  for (uint8_t reader = 0; reader < NR_OF_READERS; reader++)
+  {
+    // Look for new cards
+    byte bufferATQA[2];
+    byte bufferSize = sizeof(bufferATQA);
+    MFRC522::StatusCode status = mfrc522[reader].PICC_RequestA(bufferATQA, &bufferSize);
+    bool result = (status == MFRC522::STATUS_OK || status == MFRC522::STATUS_COLLISION);
+    if (!result)
+    {
+      status = mfrc522[reader].PICC_WakeupA(bufferATQA, &bufferSize);
+      result = (status == MFRC522::STATUS_OK || status == MFRC522::STATUS_COLLISION);
+    }
+    if (status == 0 || status == 2)
+    {
+      Serial.print("<");
+
+      int c = 0;
+      if (mfrc522[reader].PICC_ReadCardSerial())
+        c++;
+      if (mfrc522[reader].PICC_ReadCardSerial())
+        c++;
+      Serial.print(c);
+      if (c > 0)
+      {
+        // Show some details of the PICC (that is: the tag/card)
+        dump_byte_array(mfrc522[reader].uid.uidByte, mfrc522[reader].uid.size);
+
+        Serial.print(F(", Reader "));
+        Serial.print(reader);
+        Serial.print(" ");
+        Serial.print(read_rfid);
+
+        ValidateCard(reader);
+      }
+      Serial.println(">");
+    }
+    else
+    {
+      if (Card_ok[reader] > 0)
+        Card_ok[reader]--;
     }
 
+    // Stop encryption on PCD
+    mfrc522[reader].PCD_StopCrypto1();
+    // Halt PICC
+    mfrc522[reader].PICC_HaltA();
+  }
 }
+
 void espTcpClient_onRecieved(char *data, uint16_t len)
 {
   Serial.println("TCP: Recieved " + String(len) + " bytes: " + String(data));
@@ -254,26 +250,27 @@ void dump_byte_array(byte *buffer, byte bufferSize)
 void ValidateCard(int reader)
 {
   //check each valid card
-  bool found = false;    
+  bool found = false;
   int cardCount = 0;
 
   for (int j = 0; j < sizeof(ValidCards[reader]); j++)
   {
-    if (ValidCards[reader][j] == read_rfid) {
-      found=true;
+    if (ValidCards[reader][j] == read_rfid)
+    {
+      found = true;
     }
   }
-  if(found) Card_ok[reader] = 4;
-
+  if (found)
+    Card_ok[reader] = 4;
 
   for (int j = 0; j < NR_OF_READERS; j++)
   {
-    if (Card_ok[j]>0) cardCount++;
+    if (Card_ok[j] > 0)
+      cardCount++;
   }
 
   if (cardCount == NR_OF_READERS)
   {
-    ValidCardOrder = true;
     open_lift();
   }
   Serial.print(" Valid " + String(Card_ok[0]) + String(Card_ok[1]) + String(Card_ok[2]) + String(Card_ok[3]));
@@ -283,8 +280,10 @@ void open_door1()
 {
   //Serial.println("****************************************** Door opened");
   digitalWrite(LOCK_DOOR, LOW);
-  if (PuzzleState == 0) PuzzleState = 1;
+  if (PuzzleState == 0)
+    PuzzleState = 1;
 }
+
 void open_lift()
 {
   Serial.println("****************************************** LIFT opened");
