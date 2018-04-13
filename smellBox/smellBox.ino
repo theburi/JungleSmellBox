@@ -47,8 +47,8 @@
 #define LOCK_DOOR 3 //Lock for the door
 #define LOCK_LIFT 2 //Lock that lifts Top
 
-#define TCP_REQUEST_PERIOD_MS 6000
-#define TCP_BLOCK_TIMEOUT_MS 500
+#define TCP_REQUEST_PERIOD_MS 5000
+#define TCP_BLOCK_TIMEOUT_MS 1000
 
 //this is the pin the relay is on, change as needed for your code
 
@@ -58,6 +58,11 @@
 //WiFi
 unsigned long tcpRequestTS = 0;
 unsigned long tcpTimeOut = 1000;
+
+int sendErrorCount=0;
+bool _connected = false;
+bool doorLocked = false;
+
 
 //MFR5210
 byte ssPins[] = {SS_1_PIN, SS_2_PIN, SS_3_PIN, SS_4_PIN};
@@ -82,17 +87,30 @@ int waitForTCPRecieve = 0;
  */
 void setup()
 {
-
   Serial.begin(115200); // Initialize serial communications with the PC
-  while (!Serial)
-    ; // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
 
-  espTcpClient_init();
+  //wait for table to startup
+  delay(10*1000);
+  Serial.println("*");
+  delay(10*1000);
+  Serial.println("*");
+  delay(10*1000);
+  Serial.println("*");
+  delay(10*1000);
+  Serial.println("*");
+  delay(10*1000);
+  Serial.println("*");
+  
   pinMode(LOCK_DOOR, OUTPUT);
-  digitalWrite(LOCK_DOOR, HIGH);
+  digitalWrite(LOCK_DOOR, LOW);
 
   pinMode(LOCK_LIFT, OUTPUT);
   digitalWrite(LOCK_LIFT, HIGH);
+  
+  
+    ; // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
+
+  espTcpClient_init();
 
   SPI.begin(); // Init SPI bus
 
@@ -135,7 +153,18 @@ void loop()
   //
   //  WiFi  //
   //
+  if (sendErrorCount>10)
+  {
+    Serial.println("Error in connection Reboot");
+    // reboot until wifi connected  //
+    delay(3000);
+    asm volatile("  jmp 0");
+  }
 
+  if (_connected && !doorLocked)  {
+     digitalWrite(LOCK_DOOR, HIGH);
+     doorLocked=true;
+  }
   //  check wifi connected  //
   if (esp_isWifiConnected)
   {
@@ -143,14 +172,14 @@ void loop()
     if (millis() - tcpRequestTS > TCP_REQUEST_PERIOD_MS && millis() > 10000)
     {
       tcpRequestTS = millis();
-
+      sendErrorCount++;
       //  prepare data  //
       char toSend[4];
       toSend[0] = 1;
       toSend[1] = 1;
       toSend[2] = '\0';
 
-      Serial.println("TCP: Sending " + String(2) + "  bytes: " + String(toSend));
+      Serial.println("TCP: Sending " + String(2) + "  bytes: " + String(toSend) + " Error: " + String(sendErrorCount));
 
       //  send data  //
       espTcpClient_send(toSend);
@@ -186,7 +215,7 @@ void readRFID()
     if (status == 0 || status == 2)
     {
       Serial.print("<");
-
+     // mfrc522[reader].PCD_SetAntennaGain(0x07);
       int c = 0;
       if (mfrc522[reader].PICC_ReadCardSerial())
         c++;
@@ -223,7 +252,7 @@ void readRFID()
 void espTcpClient_onRecieved(char *data, uint16_t len)
 {
   Serial.println("TCP: Recieved " + String(len) + " bytes: " + String(data));
-
+  sendErrorCount = 0;
   //  check msg  //
   if (len == 2)
   {
@@ -233,6 +262,7 @@ void espTcpClient_onRecieved(char *data, uint16_t len)
   //  positions  //
   else if (len == 5)
   {
+    _connected = true;
     stageNumber = (int)data[0] - 2;
     Serial.println("Stage Number is: " + String(stageNumber));
   }
@@ -261,8 +291,10 @@ void ValidateCard(int reader)
     }
   }
   if (found)
-    Card_ok[reader] = 4;
-
+    Card_ok[reader] = 3;
+  else
+    Card_ok[reader]--;
+    
   for (int j = 0; j < NR_OF_READERS; j++)
   {
     if (Card_ok[j] > 0)
