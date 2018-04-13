@@ -34,7 +34,7 @@
 
 #include <SPI.h>
 #include <MFRC522.h>
-#include "espTcpClient.h"
+//#include "espTcpClient.h"
 
 #define RST_PIN 10 // Configurable, see typical pin layout above
 
@@ -44,7 +44,6 @@
 #define SS_3_PIN 8  // Configurable, take a unused pin, only HIGH/LOW required, must be diffrent to SS 1
 #define SS_4_PIN 6  // Configurable, take a unused pin, only HIGH/LOW required, must be diffrent to SS 1
 
-#define LOCK_DOOR 3 //Lock for the door
 #define LOCK_LIFT 2 //Lock that lifts Top
 
 #define TCP_REQUEST_PERIOD_MS 5000
@@ -89,28 +88,13 @@ void setup()
 {
   Serial.begin(115200); // Initialize serial communications with the PC
 
-  //wait for table to startup
-  delay(10*1000);
-  Serial.println("*");
-  delay(10*1000);
-  Serial.println("*");
-  delay(10*1000);
-  Serial.println("*");
-  delay(10*1000);
-  Serial.println("*");
-  delay(10*1000);
-  Serial.println("*");
-  
-  pinMode(LOCK_DOOR, OUTPUT);
-  digitalWrite(LOCK_DOOR, LOW);
-
   pinMode(LOCK_LIFT, OUTPUT);
   digitalWrite(LOCK_LIFT, HIGH);
   
   
     ; // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
 
-  espTcpClient_init();
+  //espTcpClient_init();
 
   SPI.begin(); // Init SPI bus
 
@@ -130,71 +114,9 @@ void setup()
  */
 void loop()
 {
+  readRFID();
 
-  espTcpClient_check();
-
-  if (stageNumber > 1 && PuzzleState > 0)
-  {
-    open_door1();
-  }
-  // if we skipped to next stage we open Lift Door as a temp bypass for no Admin
-  else if (stageNumber > 2)
-  {
-    open_lift();
-  }
-
-  if (PuzzleState == 1)
-  {
-    if (millis() - waitForTCPRecieve > TCP_BLOCK_TIMEOUT_MS)
-    {
-      readRFID();
-    }
-  }
-  //
-  //  WiFi  //
-  //
-  if (sendErrorCount>10)
-  {
-    Serial.println("Error in connection Reboot");
-    // reboot until wifi connected  //
-    delay(3000);
-    asm volatile("  jmp 0");
-  }
-
-  if (_connected && !doorLocked)  {
-     digitalWrite(LOCK_DOOR, HIGH);
-     doorLocked=true;
-  }
-  //  check wifi connected  //
-  if (esp_isWifiConnected)
-  {
-    //  request every xxx sec  //
-    if (millis() - tcpRequestTS > TCP_REQUEST_PERIOD_MS && millis() > 10000)
-    {
-      tcpRequestTS = millis();
-      sendErrorCount++;
-      //  prepare data  //
-      char toSend[4];
-      toSend[0] = 1;
-      toSend[1] = 1;
-      toSend[2] = '\0';
-
-      Serial.println("TCP: Sending " + String(2) + "  bytes: " + String(toSend) + " Error: " + String(sendErrorCount));
-
-      //  send data  //
-      espTcpClient_send(toSend);
-      waitForTCPRecieve = millis();
-    }
-  }
-  //  no wifi  TODO reset esp after 3 reties//
-  else
-  {
-    Serial.println("No WiFi connection");
-
-    // reboot until wifi connected  //
-    delay(3000);
-    asm volatile("  jmp 0");
-  }
+  delay(100);
 }
 
 void readRFID()
@@ -249,25 +171,6 @@ void readRFID()
   }
 }
 
-void espTcpClient_onRecieved(char *data, uint16_t len)
-{
-  Serial.println("TCP: Recieved " + String(len) + " bytes: " + String(data));
-  sendErrorCount = 0;
-  //  check msg  //
-  if (len == 2)
-  {
-    //  error msg  //
-  }
-
-  //  positions  //
-  else if (len == 5)
-  {
-    _connected = true;
-    stageNumber = (int)data[0] - 2;
-    Serial.println("Stage Number is: " + String(stageNumber));
-  }
-  waitForTCPRecieve = 0;
-}
 void dump_byte_array(byte *buffer, byte bufferSize)
 {
   read_rfid = "";
@@ -306,14 +209,6 @@ void ValidateCard(int reader)
     open_lift();
   }
   Serial.print(" Valid " + String(Card_ok[0]) + String(Card_ok[1]) + String(Card_ok[2]) + String(Card_ok[3]));
-}
-
-void open_door1()
-{
-  //Serial.println("****************************************** Door opened");
-  digitalWrite(LOCK_DOOR, LOW);
-  if (PuzzleState == 0)
-    PuzzleState = 1;
 }
 
 void open_lift()
