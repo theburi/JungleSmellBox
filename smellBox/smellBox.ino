@@ -59,6 +59,7 @@ unsigned long tcpRequestTS = 0;
 unsigned long tcpTimeOut = 1000;
 
 int sendErrorCount=0;
+long lastCardDetected = 0;
 bool _connected = false;
 bool doorLocked = false;
 
@@ -191,6 +192,7 @@ void ValidateCard(int reader)
     if (ValidCards[reader][j] == read_rfid)
     {
       found = true;
+      lastCardDetected = millis();
     }
   }
   if (found)
@@ -204,6 +206,10 @@ void ValidateCard(int reader)
       cardCount++;
   }
 
+  if (cardCount == NR_OF_READERS-1 && lastCardDetected + 4000 < millis())
+  {
+    open_lift();
+  }
   if (cardCount == NR_OF_READERS)
   {
     open_lift();
